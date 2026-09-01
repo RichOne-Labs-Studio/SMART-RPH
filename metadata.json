@@ -1,0 +1,7 @@
+{
+  "name": "SMART-RPH Kota Cirebon",
+  "description": "Sistem Monitoring dan Administrasi Pemotongan Ternak UPT RPH Kota Cirebon",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
