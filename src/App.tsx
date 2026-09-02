@@ -618,6 +618,7 @@ export default function App() {
       <BpsExportModal
         isOpen={bpsModalOpen}
         onClose={() => setBpsModalOpen(false)}
+        rows={rows}
         onExport={(monthsToExport) => {
           exportBpsOfficial(rows, monthsToExport);
           pushAudit('exportBPS', { months: monthsToExport });
