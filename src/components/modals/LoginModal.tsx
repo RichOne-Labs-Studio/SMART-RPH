@@ -120,8 +120,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
           )}
 
+          {/* Quick autofill presets */}
+          <div className="pt-2 border-t border-[#2D333F]/60">
+            <div className="text-[10px] uppercase font-bold text-[#94A3B8] mb-1.5 text-center">
+              Pilihan Cepat / Akun Bawaan:
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('superadmin');
+                  setPassword('rph2026super');
+                  setErrorMsg('');
+                }}
+                className="py-1.5 px-2.5 rounded-lg text-[11px] font-semibold bg-[#13161C] hover:bg-[#1A1D23] text-amber-400 border border-amber-900/40 transition-colors"
+              >
+                👑 Superadmin
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('admin');
+                  setPassword('rph2026');
+                  setErrorMsg('');
+                }}
+                className="py-1.5 px-2.5 rounded-lg text-[11px] font-semibold bg-[#13161C] hover:bg-[#1A1D23] text-emerald-400 border border-emerald-900/40 transition-colors"
+              >
+                🛡️ Admin RPH
+              </button>
+            </div>
+          </div>
+
           <div className="p-3 rounded-xl bg-[#13161C] border border-[#2D333F] text-[11px] text-[#94A3B8] leading-relaxed">
-            Sesi aman berlaku selama 8 jam setelah berhasil terautentikasi. Semua aktivitas penambahan, pengubahan, dan penghapusan dicatat ke dalam audit trail.
+            Mendukung akun dari Google Spreadsheet maupun akun cadangan sistem. Sesi login tersimpan selama 8 jam.
           </div>
 
           <div className="flex items-center gap-2 pt-1">

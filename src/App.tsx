@@ -285,24 +285,50 @@ export default function App() {
 
   // Auth actions
   const handleLogin = async (u: string, p: string): Promise<boolean> => {
+    const trimmedU = u.trim();
+    const trimmedP = p.trim();
+
+    // 1. Coba otentikasi langsung ke Google Apps Script (Spreadsheet Backend)
     try {
-      const res = await apiPost({ action: 'login', username: u, password: p });
-      if (res.json && res.json.status === 'success' && res.json.user) {
+      const res = await apiPost({ action: 'login', username: trimmedU, password: trimmedP });
+      if (res.json && (res.json.status === 'success' || res.json.ok) && res.json.user) {
         const loggedUser = setSession({
-          username: String(res.json.user.username || u),
+          username: String(res.json.user.username || trimmedU),
           role: String(res.json.user.role || 'admin').toLowerCase(),
           token: res.json.token || null
         });
         setUser(loggedUser);
-        pushAudit('login', { username: u, role: loggedUser.role });
+        pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'spreadsheet' });
         showToast(`Selamat datang, ${loggedUser.username}! (${loggedUser.role})`, 'ok');
         syncWithSheet(false);
         return true;
       }
-      return false;
     } catch {
-      return false;
+      // Jika Apps Script timeout atau offline, lanjut ke fallback lokal
     }
+
+    // 2. Fallback autentikasi lokal bawaan jika Spreadsheet tidak merespons atau akun lokal
+    const defaultAccounts: Record<string, { pass: string; role: string }> = {
+      superadmin: { pass: 'rph2026super', role: 'superadmin' },
+      admin: { pass: 'rph2026', role: 'admin' },
+      admin_rph: { pass: 'rph2026', role: 'admin' },
+      petugas: { pass: 'rph2026', role: 'admin' },
+    };
+
+    const localMatch = defaultAccounts[trimmedU.toLowerCase()];
+    if (localMatch && localMatch.pass === trimmedP) {
+      const loggedUser = setSession({
+        username: trimmedU,
+        role: localMatch.role,
+        token: 'local_' + Date.now()
+      });
+      setUser(loggedUser);
+      pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'local' });
+      showToast(`Selamat datang, ${loggedUser.username}! (${loggedUser.role})`, 'ok');
+      return true;
+    }
+
+    return false;
   };
 
   const handleLogout = () => {
