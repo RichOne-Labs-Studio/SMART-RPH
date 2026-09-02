@@ -153,20 +153,75 @@ export const STORAGE_USERS_CACHE = 'SMART_RPH_USERS_CACHE';
 export function getCachedUsers(): Array<{ username: string; role: string; pass?: string }> {
   try {
     const raw = localStorage.getItem(STORAGE_USERS_CACHE);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const valid = parsed.filter(
+          (u: any) =>
+            u &&
+            typeof u.username === 'string' &&
+            u.username.trim().length > 0 &&
+            u.username.trim().toLowerCase() !== 'eris'
+        );
+        if (valid.length > 0) return valid;
+      }
+    }
   } catch {}
   return [
     { username: 'superadmin', role: 'superadmin' },
     { username: 'admin', role: 'admin' },
-    { username: 'petugas', role: 'petugas' },
-    { username: 'eris', role: 'admin' }
+    { username: 'petugas', role: 'petugas' }
   ];
 }
 
 export function saveCachedUsers(users: Array<{ username: string; role: string; pass?: string }>): void {
   try {
-    localStorage.setItem(STORAGE_USERS_CACHE, JSON.stringify(users));
+    const clean = users.filter(
+      (u: any) =>
+        u &&
+        typeof u.username === 'string' &&
+        u.username.trim().length > 0 &&
+        u.username.trim().toLowerCase() !== 'eris'
+    );
+    localStorage.setItem(STORAGE_USERS_CACHE, JSON.stringify(clean));
   } catch {}
+}
+
+export async function fetchSpreadsheetUsers(): Promise<Array<{ username: string; role: string }>> {
+  try {
+    const superadminLogin = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'login', username: 'superadmin', password: 'rph2026super' })
+    });
+    const loginData = await superadminLogin.json();
+    if (loginData && loginData.token) {
+      const res = await fetch(
+        CONFIG.APPS_SCRIPT_URL +
+          '?action=getUsers&token=' +
+          encodeURIComponent(loginData.token) +
+          '&v=' +
+          Date.now(),
+        { cache: 'no-store' }
+      );
+      const usersData = await res.json();
+      if (usersData && Array.isArray(usersData.users) && usersData.users.length > 0) {
+        const cleanUsers = usersData.users
+          .filter((u: any) => u && typeof u.username === 'string' && u.username.trim().length > 0)
+          .map((u: any) => ({
+            username: u.username.trim(),
+            role: String(u.role || 'petugas').toLowerCase()
+          }));
+        if (cleanUsers.length > 0) {
+          saveCachedUsers(cleanUsers);
+          return cleanUsers;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Gagal mengambil daftar pengguna dari Spreadsheet:', err);
+  }
+  return getCachedUsers();
 }
 
 export function getSession(): UserSession | null {
@@ -273,8 +328,7 @@ export async function ensureServerToken(): Promise<string | null> {
       superadmin: 'rph2026super',
       admin: 'rph2026',
       admin_rph: 'rph2026',
-      petugas: 'rph2026',
-      eris: 'rph2026'
+      petugas: 'rph2026'
     };
     const authP = defaultAccounts[authU.toLowerCase()] || 'rph2026';
     

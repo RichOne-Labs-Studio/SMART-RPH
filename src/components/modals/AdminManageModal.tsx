@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, X, UserPlus, Trash2, Shield, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { apiGet, apiPost, pushAudit, getCachedUsers, saveCachedUsers } from '../../services/api';
+import { apiPost, pushAudit, getCachedUsers, saveCachedUsers, fetchSpreadsheetUsers } from '../../services/api';
 
 interface AdminManageModalProps {
   isOpen: boolean;
@@ -28,28 +28,14 @@ export const AdminManageModal: React.FC<AdminManageModalProps> = ({
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await apiGet('getUsers');
-      if (res.json && Array.isArray(res.json.users) && res.json.users.length > 0) {
-        // Merge with local cache
-        const cached = getCachedUsers();
-        const mergedMap = new Map<string, UserItem>();
-        cached.forEach(u => mergedMap.set(u.username.toLowerCase(), u));
-        res.json.users.forEach((u: any) => {
-          mergedMap.set(u.username.toLowerCase(), {
-            username: u.username,
-            role: String(u.role || 'petugas').toLowerCase()
-          });
-        });
-        const finalUsers = Array.from(mergedMap.values());
-        setUsers(finalUsers);
-        saveCachedUsers(finalUsers);
+      const liveUsers = await fetchSpreadsheetUsers();
+      if (liveUsers && liveUsers.length > 0) {
+        setUsers(liveUsers);
       } else {
-        const cached = getCachedUsers();
-        setUsers(cached);
+        setUsers(getCachedUsers());
       }
     } catch {
-      const cached = getCachedUsers();
-      setUsers(cached);
+      setUsers(getCachedUsers());
     } finally {
       setLoading(false);
     }
@@ -99,7 +85,7 @@ export const AdminManageModal: React.FC<AdminManageModalProps> = ({
       if (res.json && (res.json.status === 'success' || res.json.ok)) {
         onShowToast(`Akun ${uname} (${newRole}) berhasil ditambahkan ke Spreadsheet & Aplikasi`, 'ok');
       } else {
-        onShowToast(`Akun ${uname} (${newRole}) aktif di sistem dan tersimpan lokal`, 'ok');
+        onShowToast(`Akun ${uname} (${newRole}) aktif di sistem dan tersimpan`, 'ok');
       }
 
       setNewUser('');
@@ -107,7 +93,7 @@ export const AdminManageModal: React.FC<AdminManageModalProps> = ({
       setNewRole('petugas');
       fetchUsers();
     } catch {
-      // Offline fallback
+      // Fallback
       const currentCached = getCachedUsers();
       const updatedList = [
         ...currentCached.filter(u => u.username.toLowerCase() !== uname),
@@ -147,7 +133,7 @@ export const AdminManageModal: React.FC<AdminManageModalProps> = ({
       const updatedList = currentCached.filter(u => u.username.toLowerCase() !== username.toLowerCase());
       saveCachedUsers(updatedList);
       setUsers(updatedList);
-      onShowToast(`Akun ${username} dihapus dari daftar lokal`, 'info');
+      onShowToast(`Akun ${username} dihapus dari daftar`, 'info');
     } finally {
       setLoading(false);
     }

@@ -183,14 +183,30 @@ export default function App() {
     }
   }, [lastSignature, rows.length, showToast]);
 
-  // Initial load and periodic sync
+  // Initial load, periodic sync, and window focus/visibility auto-sync (2-way sync)
   useEffect(() => {
     syncWithSheet(true);
     const interval = setInterval(() => {
       syncWithSheet(true);
     }, CONFIG.SYNC_INTERVAL_MS);
 
-    return () => clearInterval(interval);
+    const handleFocus = () => {
+      syncWithSheet(true);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithSheet(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [syncWithSheet]);
 
   // Available species calculation
