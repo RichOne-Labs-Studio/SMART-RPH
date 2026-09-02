@@ -1,5 +1,6 @@
 import React from 'react';
 import { BpsTableData, formatBpsNumber } from '../utils/bpsFormatHelper';
+import { BpsLogo } from './BpsLogo';
 
 interface BpsOfficialTableProps {
   data: BpsTableData;
@@ -14,17 +15,8 @@ export const BpsOfficialSingleTable: React.FC<BpsOfficialTableProps> = ({ data }
       <div className="flex justify-between items-start border-b-2 border-black pb-2 mb-2 gap-4">
         {/* Kiri: Logo & Info BPS */}
         <div className="w-[32%] flex gap-2.5 items-start">
-          {/* Logo BPS SVG */}
-          <div className="w-12 h-12 flex-shrink-0">
-            <svg viewBox="0 0 100 100" className="w-full h-full">
-              {/* Segitiga Biru Kiri */}
-              <polygon points="10,20 45,20 25,80 10,80" fill="#0284C7" />
-              {/* Segitiga Oranye Kanan Atas */}
-              <polygon points="50,15 85,15 65,55 50,55" fill="#F97316" />
-              {/* Segitiga Hijau Kanan Bawah */}
-              <polygon points="40,58 75,58 58,90 40,90" fill="#22C55E" />
-            </svg>
-          </div>
+          {/* Logo BPS SVG Resmi */}
+          <BpsLogo className="w-13 h-13" />
           <div className="space-y-0.5 text-[9px] leading-[1.25]">
             <h1 className="text-xs font-black tracking-tight text-black uppercase">
               Badan Pusat Statistik
@@ -154,11 +146,11 @@ export const BpsOfficialSingleTable: React.FC<BpsOfficialTableProps> = ({ data }
                   <th colSpan={3} className="border border-black py-0.5">.............</th>
                 </>
               )}
-              <th rowSpan={2} className="border border-black py-0.5 align-middle">Jeroan</th>
-              <th rowSpan={2} className="border border-black py-0.5 align-middle">Kulit Basah</th>
-              <th rowSpan={2} className="border border-black py-0.5 align-middle">Daging Skeletal</th>
-              <th rowSpan={2} className="border border-black py-0.5 align-middle">Daging Variasi</th>
-              <th rowSpan={2} className="border border-black py-0.5 align-middle">Produk lainnya</th>
+              <th rowSpan={3} className="border border-black py-0.5 align-middle">Jeroan</th>
+              <th rowSpan={3} className="border border-black py-0.5 align-middle">Kulit Basah</th>
+              <th rowSpan={3} className="border border-black py-0.5 align-middle">Daging Skeletal</th>
+              <th rowSpan={3} className="border border-black py-0.5 align-middle">Daging Variasi</th>
+              <th rowSpan={3} className="border border-black py-0.5 align-middle">Produk lainnya</th>
             </tr>
 
             {/* Header Lapis 3: Jantan & Betina & Berat */}
