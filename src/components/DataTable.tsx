@@ -53,7 +53,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     );
   };
 
-  const isAdmin = user && (user.role === 'admin' || user.role === 'superadmin');
+  const isStaff = user !== null;
 
   return (
     <div className="bg-[#161920] border border-[#2D333F] rounded-2xl shadow-sm overflow-hidden flex flex-col">
@@ -126,7 +126,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                 Daging (kg) {renderSortIcon('daging')}
               </th>
               <th className="py-3 px-4 text-right whitespace-nowrap">Rendemen</th>
-              {isAdmin && (
+              {isStaff && (
                 <th className="py-3 px-4 text-center whitespace-nowrap">Aksi</th>
               )}
             </tr>
@@ -200,7 +200,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                       {pct(r.karkas, r.hidup)}
                     </td>
 
-                    {isAdmin && (
+                    {isStaff && (
                       <td
                         className="py-3 px-4 text-center whitespace-nowrap"
                         onClick={(e) => e.stopPropagation()}
@@ -236,7 +236,7 @@ export const DataTable: React.FC<DataTableProps> = ({
             ) : (
               <tr>
                 <td
-                  colSpan={isAdmin ? 12 : 11}
+                  colSpan={isStaff ? 12 : 11}
                   className="py-12 text-center text-[#64748B]"
                 >
                   <div className="flex flex-col items-center justify-center gap-2">

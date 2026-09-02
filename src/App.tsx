@@ -18,7 +18,9 @@ import {
   dataSignature, 
   apiGet, 
   apiPost, 
-  uid 
+  uid,
+  getCachedUsers,
+  saveCachedUsers
 } from './services/api';
 import { exportExcelMultiMonth, exportBpsOfficial } from './utils/exportUtils';
 import { Header } from './components/Header';
@@ -77,6 +79,7 @@ export default function App() {
     text: 'Memuat data…',
     ok: true
   });
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSignature, setLastSignature] = useState<string>('');
 
   // Toast notifications
@@ -136,6 +139,7 @@ export default function App() {
 
   // Sync with Google Apps Script
   const syncWithSheet = useCallback(async (isAuto = false) => {
+    setIsSyncing(true);
     setSyncStatus({
       text: isAuto ? 'Sinkronisasi otomatis…' : 'Menghubungi Spreadsheet…',
       ok: false
@@ -152,7 +156,9 @@ export default function App() {
         if (sig !== lastSignature) {
           setRows(newRows);
           setLastSignature(sig);
-          if (!isAuto) showToast(`Data berhasil disinkronkan (${newRows.length} baris)`, 'ok');
+          if (!isAuto) showToast(`Data berhasil disinkronkan (${newRows.length} baris dari Spreadsheet)`, 'ok');
+        } else if (!isAuto) {
+          showToast(`Data sudah mutakhir (${newRows.length} baris)`, 'ok');
         }
 
         setSyncStatus({
@@ -164,12 +170,16 @@ export default function App() {
           text: `Data lokal aktif (${rows.length} baris)`,
           ok: true
         });
+        if (!isAuto) showToast('Data lokal aktif', 'info');
       }
     } catch {
       setSyncStatus({
         text: 'Mode offline • Data lokal aktif',
         ok: false
       });
+      if (!isAuto) showToast('Gagal terhubung ke Spreadsheet (Mode Offline)', 'warn');
+    } finally {
+      setIsSyncing(false);
     }
   }, [lastSignature, rows.length, showToast]);
 
@@ -294,25 +304,43 @@ export default function App() {
       if (res.json && (res.json.status === 'success' || res.json.ok) && res.json.user) {
         const loggedUser = setSession({
           username: String(res.json.user.username || trimmedU),
-          role: String(res.json.user.role || 'admin').toLowerCase(),
+          role: String(res.json.user.role || 'petugas').toLowerCase(),
           token: res.json.token || null
         });
         setUser(loggedUser);
         pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'spreadsheet' });
-        showToast(`Selamat datang, ${loggedUser.username}! (${loggedUser.role})`, 'ok');
+        showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
         syncWithSheet(false);
         return true;
       }
     } catch {
-      // Jika Apps Script timeout atau offline, lanjut ke fallback lokal
+      // Jika Apps Script timeout atau offline, lanjut ke akun terdaftar lokal
     }
 
-    // 2. Fallback autentikasi lokal bawaan jika Spreadsheet tidak merespons atau akun lokal
+    // 2. Cek akun yang tersimpan di cache lokal (termasuk user yang baru dibuat dari app)
+    const cachedUsers = getCachedUsers();
+    const matchedCached = cachedUsers.find(
+      cu => cu.username.toLowerCase() === trimmedU.toLowerCase() && (cu.pass === trimmedP || !cu.pass)
+    );
+    if (matchedCached) {
+      const loggedUser = setSession({
+        username: matchedCached.username,
+        role: matchedCached.role.toLowerCase(),
+        token: 'local_' + Date.now()
+      });
+      setUser(loggedUser);
+      pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'cached' });
+      showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
+      return true;
+    }
+
+    // 3. Fallback akun default sistem
     const defaultAccounts: Record<string, { pass: string; role: string }> = {
       superadmin: { pass: 'rph2026super', role: 'superadmin' },
       admin: { pass: 'rph2026', role: 'admin' },
       admin_rph: { pass: 'rph2026', role: 'admin' },
-      petugas: { pass: 'rph2026', role: 'admin' },
+      petugas: { pass: 'rph2026', role: 'petugas' },
+      eris: { pass: 'rph2026', role: 'admin' },
     };
 
     const localMatch = defaultAccounts[trimmedU.toLowerCase()];
@@ -324,7 +352,7 @@ export default function App() {
       });
       setUser(loggedUser);
       pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'local' });
-      showToast(`Selamat datang, ${loggedUser.username}! (${loggedUser.role})`, 'ok');
+      showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
       return true;
     }
 
@@ -335,10 +363,10 @@ export default function App() {
     if (user) pushAudit('logout', { username: user.username });
     clearSession();
     setUser(null);
-    showToast('Berhasil logout dari sesi admin', 'info');
+    showToast('Berhasil logout dari sesi', 'info');
   };
 
-  // Input / Update row
+  // Input / Update row dengan sinkronisasi langsung ke Spreadsheet
   const handleSaveRow = async (data: Partial<SlaughterRow>, editId?: string) => {
     const nowIso = new Date().toISOString();
 
@@ -350,7 +378,7 @@ export default function App() {
         const updated = ensureRowMeta({
           ...prev,
           ...data,
-          id: prev.id || uid(),
+          id: prev.id || editId || uid(),
           updated_at: nowIso,
           created_by: prev.created_by || user?.username
         });
@@ -359,34 +387,55 @@ export default function App() {
         newRows[idx] = updated;
         setRows(newRows);
         pushAudit('updateRow', { id: updated.id, date: updated.date, species: updated.species });
-        showToast(`Data ${updated.date} (${updated.species}) diperbarui`, 'ok');
+        showToast(`Memperbarui data ${updated.date} (${updated.species})…`, 'info');
 
-        // Async server update
-        apiPost({ action: 'updateRow', data: updated }).catch(() => {});
+        // Kirim ke Google Apps Script / Spreadsheet
+        try {
+          const res = await apiPost({ action: 'updateRow', data: updated });
+          if (res.json && (res.json.status === 'success' || res.json.ok)) {
+            showToast(`Data ${updated.date} (${updated.species}) tersimpan di Spreadsheet`, 'ok');
+          }
+        } catch {
+          showToast(`Data ${updated.date} tersimpan di aplikasi (Mode Offline)`, 'warn');
+        }
       }
     } else {
       // Add new
+      const newRowId = data.date && data.species ? `${data.date}|${data.species}` : `r_${Date.now()}`;
       const newRow = ensureRowMeta({
         ...data,
-        id: uid(),
+        id: newRowId,
         created_at: nowIso,
         updated_at: nowIso,
-        created_by: user?.username || 'admin'
+        created_by: user?.username || 'petugas'
       });
 
+      // Tambahkan ke tabel lokal terlebih dahulu untuk kecepatan UI
       setRows(prev => [newRow, ...prev]);
       pushAudit('addRow', { id: newRow.id, date: newRow.date, species: newRow.species });
-      showToast(`Data pemotongan baru disimpan (${newRow.species})`, 'ok');
+      showToast(`Menyimpan data ${newRow.species} ke Spreadsheet…`, 'info');
 
-      // Async server push
-      apiPost({ action: 'addRow', data: newRow }).catch(() => {});
+      // Kirim ke Google Apps Script / Spreadsheet
+      try {
+        const res = await apiPost({ action: 'addRow', data: newRow });
+        if (res.json && (res.json.status === 'success' || res.json.ok)) {
+          showToast(`Data ${newRow.species} (${newRow.date}) berhasil masuk ke Spreadsheet!`, 'ok');
+        } else {
+          showToast(`Data ${newRow.species} tersimpan di aplikasi`, 'ok');
+        }
+      } catch {
+        showToast(`Data ${newRow.species} tersimpan di aplikasi (Mode Offline)`, 'warn');
+      }
     }
+
+    // Picu sinkronisasi data mutakhir
+    setTimeout(() => syncWithSheet(true), 1200);
   };
 
-  // Delete row
+  // Delete row dengan sinkronisasi ke Spreadsheet
   const handleDeleteRow = async (id: string, date: string, species: string, ekor: number) => {
     if (!user) {
-      showToast('Akses admin diperlukan untuk menghapus', 'err');
+      showToast('Akses login diperlukan untuk menghapus', 'err');
       return;
     }
     if (!confirm(`Hapus catatan pemotongan tanggal ${date} • ${species} (${ekor} ekor)?`)) {
@@ -395,10 +444,20 @@ export default function App() {
 
     setRows(prev => prev.filter(r => r.id !== id && `${r.date}|${r.species}` !== id));
     pushAudit('deleteRow', { id, date, species, ekor });
-    showToast(`Catatan ${date} • ${species} dihapus`, 'warn');
+    showToast(`Menghapus data ${date} • ${species} dari Spreadsheet…`, 'info');
 
-    // Async server delete
-    apiPost({ action: 'deleteRow', id, date, species }).catch(() => {});
+    try {
+      const res = await apiPost({ action: 'deleteRow', id, date, species });
+      if (res.json && (res.json.status === 'success' || res.json.ok)) {
+        showToast(`Catatan ${date} • ${species} terhapus dari Spreadsheet`, 'ok');
+      } else {
+        showToast(`Catatan ${date} • ${species} dihapus dari aplikasi`, 'warn');
+      }
+    } catch {
+      showToast(`Catatan ${date} dihapus dari aplikasi`, 'warn');
+    }
+
+    setTimeout(() => syncWithSheet(true), 1200);
   };
 
   // Print
@@ -416,7 +475,10 @@ export default function App() {
         onToggleTheme={toggleTheme}
         user={user}
         rphTitle={INITIAL_DB.rph || 'SMART-RPH'}
-        rphSub="Sistem Monitoring & Administrasi RPH"
+        rphSub="Sistem Monitoring & Administrasi Pemotongan RPH Kota Cirebon"
+        onSync={() => syncWithSheet(false)}
+        syncStatus={syncStatus}
+        isSyncing={isSyncing}
       />
 
       {/* Main Container */}
@@ -439,6 +501,8 @@ export default function App() {
           onExportExcel={() => setExcelModalOpen(true)}
           onExportBps={() => setBpsModalOpen(true)}
           onPrint={handlePrint}
+          onSync={() => syncWithSheet(false)}
+          syncStatus={syncStatus}
           user={user}
           onOpenLogin={() => setLoginModalOpen(true)}
           onLogout={handleLogout}

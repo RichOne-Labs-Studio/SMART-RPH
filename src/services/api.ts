@@ -102,19 +102,55 @@ export function cleanGroups(groups: any): Record<string, any> {
 
 export function ensureRowMeta(r: any, idx?: number): SlaughterRow {
   let rowId = r.id;
-  if (!rowId || !String(rowId).startsWith('r_')) {
-    rowId = rowId && idx !== undefined ? `${rowId}_${idx}` : (rowId ? `${rowId}_${uid()}` : uid());
+  if (!rowId || String(rowId).trim() === '') {
+    rowId = r.date && r.species ? `${r.date}|${r.species}` : (idx !== undefined ? `r_${idx}_${uid()}` : uid());
   }
 
   return {
     ...r,
-    id: rowId,
+    id: String(rowId),
+    date: r.date || new Date().toISOString().split('T')[0],
     month: normalizeMonth(r.month || r.bulan),
+    species: r.species || 'Sapi',
+    table: r.table || (r.species === 'Sapi' ? 'Sapi' : 'Selain Sapi'),
+    ekor: Number(r.ekor) || 0,
+    hidup: Number(r.hidup) || 0,
+    karkas: Number(r.karkas) || 0,
+    daging: Number(r.daging) || 0,
+    jeroan: Number(r.jeroan) || 0,
+    kulit_basah: Number(r.kulit_basah) || 0,
+    daging_skeletal: Number(r.daging_skeletal) || 0,
+    daging_variasi: Number(r.daging_variasi) || 0,
+    produk_lainnya: Number(r.produk_lainnya) || 0,
+    male: Number(r.male) || 0,
+    female_prod: Number(r.female_prod) || 0,
+    female_nonprod: Number(r.female_nonprod) || 0,
     groups: cleanGroups(r.groups),
     created_at: r.created_at || null,
     updated_at: r.updated_at || null,
     created_by: r.created_by || null
   };
+}
+
+export const STORAGE_USERS_CACHE = 'SMART_RPH_USERS_CACHE';
+
+export function getCachedUsers(): Array<{ username: string; role: string; pass?: string }> {
+  try {
+    const raw = localStorage.getItem(STORAGE_USERS_CACHE);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
+    { username: 'superadmin', role: 'superadmin' },
+    { username: 'admin', role: 'admin' },
+    { username: 'petugas', role: 'petugas' },
+    { username: 'eris', role: 'admin' }
+  ];
+}
+
+export function saveCachedUsers(users: Array<{ username: string; role: string; pass?: string }>): void {
+  try {
+    localStorage.setItem(STORAGE_USERS_CACHE, JSON.stringify(users));
+  } catch {}
 }
 
 export function getSession(): UserSession | null {
@@ -185,40 +221,67 @@ export function dataSignature(data: any): string {
 export async function apiGet(action: string, params?: Record<string, string>): Promise<{ ok: boolean; json: any; text: string }> {
   const q = new URLSearchParams({ action, v: String(Date.now()), ...(params || {}) });
   const u = getSession();
-  if (u && u.token) q.set('token', u.token);
-  if (u && u.username) q.set('username', u.username);
+  if (u && u.token && !q.has('token')) q.set('token', u.token);
+  if (u && u.username && !q.has('username')) q.set('username', u.username);
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
   try {
-    const res = await fetch(CONFIG.APPS_SCRIPT_URL + '?' + q.toString(), { mode: 'cors', cache: 'no-store' });
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL + '?' + q.toString(), { 
+      mode: 'cors', 
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (e) {}
     return { ok: res.ok, json, text };
   } catch (err: any) {
+    clearTimeout(timeoutId);
     return { ok: false, json: null, text: err?.message || 'Fetch error' };
   }
 }
 
 export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean; json: any; text: string }> {
   const u = getSession();
-  const payload = {
-    ...body,
-    username: u ? u.username : null,
-    role: u ? u.role : null,
-    token: u ? u.token : null,
-    clientVersion: CONFIG.APP_VERSION
+  
+  // Cleanly merge authentication token & caller without clobbering payload keys
+  const payload: Record<string, any> = {
+    clientVersion: CONFIG.APP_VERSION,
+    token: u?.token || null,
+    caller_username: u?.username || null,
+    caller_role: u?.role || null,
+    ...body
   };
+
+  // If payload does not have a username specified by the action, default to current logged in user
+  if (!payload.username && u?.username) {
+    payload.username = u.username;
+  }
+  if (!payload.role && u?.role) {
+    payload.role = u.role;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
   try {
     const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
       method: 'POST',
       mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (e) {}
     return { ok: res.ok, json, text };
   } catch (err: any) {
+    clearTimeout(timeoutId);
     return { ok: false, json: null, text: err?.message || 'Fetch error' };
   }
 }

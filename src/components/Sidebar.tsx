@@ -62,6 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onExportExcel,
   onExportBps,
   onPrint,
+  onSync,
+  syncStatus,
   user,
   onOpenLogin,
   onLogout,
@@ -71,12 +73,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const isSuperOrAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+
   return (
     <aside
       id="sidebar-container"
       className="w-full lg:w-72 xl:w-80 flex-shrink-0 bg-[#161920] border-r border-[#2D333F] p-4 sm:p-5 flex flex-col justify-between space-y-6 lg:sticky lg:top-18 lg:h-[calc(100vh-4.5rem)] overflow-y-auto"
     >
-      {/* Bagian Atas: Kategori, Parameter Filter, Pencarian, dan Ekspor (Hanya untuk Admin/Superadmin) */}
+      {/* Bagian Atas: Kategori, Parameter Filter, Pencarian, dan Ekspor */}
       <div className="space-y-5">
         {/* 1. Category Segment */}
         <div>
@@ -206,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* 3. Export & Tools Section (HANYA MUNCUL KETIKA SUDAH LOGIN SEBAGAI ADMIN / SUPERADMIN) */}
+        {/* 3. Export & Tools Section (UNTUK PETUGAS, ADMIN, SUPERADMIN) */}
         {user && (
           <div className="space-y-2.5 pt-3 border-t border-[#2D333F]">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#94A3B8] block mb-1">
@@ -264,7 +268,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="space-y-2 pt-1 border-t border-indigo-900/30">
-              {/* Tombol Input Data Potong Baru */}
+              {/* Tombol Input Data Potong Baru (Tersedia untuk Petugas, Admin & Superadmin) */}
               <button
                 id="btn-sidebar-input"
                 onClick={onOpenInput}
@@ -274,11 +278,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>Input Data Potong Baru</span>
               </button>
 
-              {/* Panel Pengaturan Superadmin (Tepat Di Atas Panel Logout) */}
-              {user.role === 'superadmin' && (
+              {/* Panel Pengaturan User & Audit (Untuk Admin & Superadmin) */}
+              {isSuperOrAdmin && (
                 <div className="space-y-1.5 pt-1.5 border-t border-indigo-900/40">
                   <div className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider px-1">
-                    Pengaturan Superadmin
+                    Pengaturan {user.role === 'superadmin' ? 'Superadmin' : 'Admin'}
                   </div>
                   <button
                     id="btn-sidebar-admin-manage"
@@ -286,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors flex items-center justify-center gap-2 shadow-sm shadow-indigo-950/50"
                   >
                     <Users className="w-3.5 h-3.5" />
-                    <span>Kelola Akun Petugas</span>
+                    <span>Kelola Akun & Petugas</span>
                   </button>
 
                   <button

@@ -6,7 +6,10 @@ import {
   Sun, 
   Building2,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -17,6 +20,9 @@ interface HeaderProps {
   user?: UserSession | null;
   rphTitle?: string;
   rphSub?: string;
+  onSync?: () => void;
+  syncStatus?: { text: string; ok: boolean };
+  isSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +31,10 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   user,
   rphTitle = 'SMART-RPH Kota Cirebon',
-  rphSub = 'Sistem Monitoring & Administrasi Pemotongan Ruminansia & Babi'
+  rphSub = 'Sistem Monitoring & Administrasi Pemotongan Ruminansia & Babi',
+  onSync,
+  syncStatus,
+  isSyncing = false
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-[#13161C]/95 backdrop-blur-md border-b border-[#2D333F] transition-colors">
@@ -64,12 +73,33 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right quick actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Subtle user badge if logged in */}
+          {/* Live Sync Status & Trigger */}
+          {onSync && (
+            <button
+              onClick={onSync}
+              disabled={isSyncing}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                syncStatus?.ok
+                  ? 'bg-[#13221C] text-emerald-300 border-emerald-800/60 hover:bg-[#182C24]'
+                  : 'bg-[#221818] text-rose-300 border-rose-800/60 hover:bg-[#2C1E1E]'
+              }`}
+              title="Klik untuk sinkronkan data langsung dengan Google Spreadsheet"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : 'text-emerald-400'}`} />
+              <span className="hidden lg:inline">{isSyncing ? 'Menyinkronkan...' : (syncStatus?.text ? syncStatus.text.split('•')[0].trim() : 'Sinkron Spreadsheet')}</span>
+              <span className="lg:hidden">Sync</span>
+            </button>
+          )}
+
+          {/* User badge if logged in */}
           {user && (
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-[#161920] text-[#CBD5E1] border border-[#2D333F]">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-[#161920] text-[#CBD5E1] border border-[#2D333F]">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="truncate max-w-[100px]">{user.username}</span>
+              <span className="truncate max-w-[90px]">{user.username}</span>
+              <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-[#1A1D23] text-emerald-400 border border-emerald-500/20">
+                {user.role}
+              </span>
             </div>
           )}
 
