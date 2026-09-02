@@ -20,7 +20,8 @@ import {
   apiPost, 
   uid,
   getCachedUsers,
-  saveCachedUsers
+  saveCachedUsers,
+  fetchSpreadsheetUsers
 } from './services/api';
 import { exportExcelMultiMonth, exportBpsOfficial } from './utils/exportUtils';
 import { Header } from './components/Header';
@@ -316,27 +317,48 @@ export default function App() {
 
     // 1. Coba otentikasi langsung ke Google Apps Script (Spreadsheet Backend)
     try {
+      clearSession(); // Bersihkan token lama sebelum verifikasi
       const res = await apiPost({ action: 'login', username: trimmedU, password: trimmedP });
+      
       if (res.json && (res.json.status === 'success' || res.json.ok) && res.json.user) {
+        const role = String(res.json.user.role || 'petugas').toLowerCase();
         const loggedUser = setSession({
           username: String(res.json.user.username || trimmedU),
-          role: String(res.json.user.role || 'petugas').toLowerCase(),
-          token: res.json.token || null
+          role,
+          token: res.json.token || res.json.sessionToken || null
         });
         setUser(loggedUser);
+
+        // Perbarui cache lokal dengan akun yang berhasil login
+        const currentCached = getCachedUsers();
+        const updatedList = [
+          ...currentCached.filter(cu => cu.username.toLowerCase() !== loggedUser.username.toLowerCase()),
+          { username: loggedUser.username, role: loggedUser.role, pass: trimmedP }
+        ];
+        saveCachedUsers(updatedList);
+
         pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'spreadsheet' });
         showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
+        
         syncWithSheet(false);
+        if ((role === 'superadmin' || role === 'admin') && loggedUser.token) {
+          fetchSpreadsheetUsers().catch(() => {});
+        }
         return true;
+      } else if (res.json && (res.json.status === 'error' || res.json.message)) {
+        // Penolakan langsung dari Spreadsheet karena username/password salah
+        const msg = res.json.message || 'Username atau password tidak sesuai di Spreadsheet';
+        showToast(msg, 'err');
+        return false;
       }
     } catch {
-      // Jika Apps Script timeout atau offline, lanjut ke akun terdaftar lokal
+      // Jika jaringan gagal / offline, coba fallback cache lokal
     }
 
-    // 2. Cek akun yang tersimpan di cache lokal (termasuk user yang baru dibuat dari app)
+    // 2. Fallback hanya jika mode offline
     const cachedUsers = getCachedUsers();
     const matchedCached = cachedUsers.find(
-      cu => cu.username.toLowerCase() === trimmedU.toLowerCase() && (cu.pass === trimmedP || !cu.pass)
+      cu => cu.username.toLowerCase() === trimmedU.toLowerCase() && cu.pass && cu.pass === trimmedP
     );
     if (matchedCached) {
       const loggedUser = setSession({
@@ -346,32 +368,11 @@ export default function App() {
       });
       setUser(loggedUser);
       pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'cached' });
-      showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
+      showToast(`Mode Offline: Selamat datang, ${loggedUser.username}!`, 'info');
       return true;
     }
 
-    // 3. Fallback akun default sistem
-    const defaultAccounts: Record<string, { pass: string; role: string }> = {
-      superadmin: { pass: 'rph2026super', role: 'superadmin' },
-      admin: { pass: 'rph2026', role: 'admin' },
-      admin_rph: { pass: 'rph2026', role: 'admin' },
-      petugas: { pass: 'rph2026', role: 'petugas' },
-      eris: { pass: 'rph2026', role: 'admin' },
-    };
-
-    const localMatch = defaultAccounts[trimmedU.toLowerCase()];
-    if (localMatch && localMatch.pass === trimmedP) {
-      const loggedUser = setSession({
-        username: trimmedU,
-        role: localMatch.role,
-        token: 'local_' + Date.now()
-      });
-      setUser(loggedUser);
-      pushAudit('login', { username: trimmedU, role: loggedUser.role, source: 'local' });
-      showToast(`Selamat datang, ${loggedUser.username}! (Akses: ${loggedUser.role})`, 'ok');
-      return true;
-    }
-
+    showToast('Username atau password tidak sesuai di Spreadsheet', 'err');
     return false;
   };
 

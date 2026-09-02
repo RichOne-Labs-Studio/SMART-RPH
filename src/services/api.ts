@@ -189,17 +189,14 @@ export function saveCachedUsers(users: Array<{ username: string; role: string; p
 
 export async function fetchSpreadsheetUsers(): Promise<Array<{ username: string; role: string }>> {
   try {
-    const superadminLogin = await fetch(CONFIG.APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'login', username: 'superadmin', password: 'rph2026super' })
-    });
-    const loginData = await superadminLogin.json();
-    if (loginData && loginData.token) {
+    const u = getSession();
+    const token = u?.token && !u.token.startsWith('local_') ? u.token : '';
+
+    if (token) {
       const res = await fetch(
         CONFIG.APPS_SCRIPT_URL +
           '?action=getUsers&token=' +
-          encodeURIComponent(loginData.token) +
+          encodeURIComponent(token) +
           '&v=' +
           Date.now(),
         { cache: 'no-store' }
@@ -207,10 +204,10 @@ export async function fetchSpreadsheetUsers(): Promise<Array<{ username: string;
       const usersData = await res.json();
       if (usersData && Array.isArray(usersData.users) && usersData.users.length > 0) {
         const cleanUsers = usersData.users
-          .filter((u: any) => u && typeof u.username === 'string' && u.username.trim().length > 0)
-          .map((u: any) => ({
-            username: u.username.trim(),
-            role: String(u.role || 'petugas').toLowerCase()
+          .filter((usr: any) => usr && typeof usr.username === 'string' && usr.username.trim().length > 0)
+          .map((usr: any) => ({
+            username: usr.username.trim(),
+            role: String(usr.role || 'petugas').toLowerCase()
           }));
         if (cleanUsers.length > 0) {
           saveCachedUsers(cleanUsers);
@@ -315,59 +312,51 @@ export async function apiGet(action: string, params?: Record<string, string>): P
   }
 }
 
-// Helper to auto-login to Google Apps Script backend if token is missing or expired
+// Helper to verify if session has a valid server token
 export async function ensureServerToken(): Promise<string | null> {
   const u = getSession();
   if (u && u.token && !u.token.startsWith('local_')) {
     return u.token;
   }
-
-  try {
-    const authU = u?.username || 'superadmin';
-    const defaultAccounts: Record<string, string> = {
-      superadmin: 'rph2026super',
-      admin: 'rph2026',
-      admin_rph: 'rph2026',
-      petugas: 'rph2026'
-    };
-    const authP = defaultAccounts[authU.toLowerCase()] || 'rph2026';
-    
-    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'login', username: authU, password: authP })
-    });
-    const text = await res.text();
-    let json: any = null;
-    try { json = JSON.parse(text); } catch {}
-    if (json && (json.status === 'success' || json.ok) && json.token) {
-      setSession({
-        username: authU,
-        role: u?.role || json.user?.role || 'admin',
-        token: json.token
-      });
-      return json.token;
-    }
-  } catch {}
   return null;
 }
 
 export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean; json: any; text: string }> {
-  let u = getSession();
-  
-  // If action requires server authorization and token is missing or local, try auto-obtaining token
-  if (body.action !== 'login' && body.action !== 'ping' && (!u?.token || u.token.startsWith('local_'))) {
-    const newToken = await ensureServerToken();
-    if (newToken) {
-      u = getSession();
+  // Jika action adalah login, kirim kredensial bersih langsung ke GAS tanpa token lama
+  if (body.action === 'login') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    try {
+      const cleanLoginPayload = {
+        clientVersion: CONFIG.APP_VERSION,
+        action: 'login',
+        username: String(body.username || '').trim(),
+        password: String(body.password || '').trim()
+      };
+      const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(cleanLoginPayload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch (e) {}
+      return { ok: res.ok, json, text };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      return { ok: false, json: null, text: err?.message || 'Fetch error' };
     }
   }
+
+  const u = getSession();
 
   // Cleanly merge authentication token & caller without clobbering payload keys
   const payload: Record<string, any> = {
     clientVersion: CONFIG.APP_VERSION,
-    token: u?.token || null,
+    token: u?.token && !u.token.startsWith('local_') ? u.token : null,
     caller_username: u?.username || null,
     caller_role: u?.role || null,
     ...body
@@ -396,24 +385,6 @@ export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean;
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (e) {}
-
-    // If server says Unauthorized (e.g. token expired on GAS), attempt one refresh and retry
-    if (json && json.status === 'error' && String(json.message).toLowerCase().includes('token') && body.action !== 'login') {
-      const refreshedToken = await ensureServerToken();
-      if (refreshedToken) {
-        payload.token = refreshedToken;
-        const retryRes = await fetch(CONFIG.APPS_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        const retryText = await retryRes.text();
-        let retryJson = null;
-        try { retryJson = JSON.parse(retryText); } catch {}
-        return { ok: retryRes.ok, json: retryJson, text: retryText };
-      }
-    }
 
     return { ok: res.ok, json, text };
   } catch (err: any) {
