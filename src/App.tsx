@@ -393,7 +393,12 @@ export default function App() {
         try {
           const res = await apiPost({ action: 'updateRow', data: updated });
           if (res.json && (res.json.status === 'success' || res.json.ok)) {
-            showToast(`Data ${updated.date} (${updated.species}) tersimpan di Spreadsheet`, 'ok');
+            showToast(`Data ${updated.date} (${updated.species}) tersimpan di Spreadsheet!`, 'ok');
+            setTimeout(() => syncWithSheet(true), 1500);
+          } else if (res.json && res.json.status === 'error') {
+            showToast(`Spreadsheet: ${res.json.message || 'Gagal tersimpan'}`, 'warn');
+          } else {
+            showToast(`Data ${updated.date} tersimpan di aplikasi (Mode Offline)`, 'warn');
           }
         } catch {
           showToast(`Data ${updated.date} tersimpan di aplikasi (Mode Offline)`, 'warn');
@@ -420,6 +425,9 @@ export default function App() {
         const res = await apiPost({ action: 'addRow', data: newRow });
         if (res.json && (res.json.status === 'success' || res.json.ok)) {
           showToast(`Data ${newRow.species} (${newRow.date}) berhasil masuk ke Spreadsheet!`, 'ok');
+          setTimeout(() => syncWithSheet(true), 1500);
+        } else if (res.json && res.json.status === 'error') {
+          showToast(`Spreadsheet: ${res.json.message || 'Gagal menyimpan'}`, 'warn');
         } else {
           showToast(`Data ${newRow.species} tersimpan di aplikasi`, 'ok');
         }
@@ -427,9 +435,6 @@ export default function App() {
         showToast(`Data ${newRow.species} tersimpan di aplikasi (Mode Offline)`, 'warn');
       }
     }
-
-    // Picu sinkronisasi data mutakhir
-    setTimeout(() => syncWithSheet(true), 1200);
   };
 
   // Delete row dengan sinkronisasi ke Spreadsheet
@@ -450,14 +455,15 @@ export default function App() {
       const res = await apiPost({ action: 'deleteRow', id, date, species });
       if (res.json && (res.json.status === 'success' || res.json.ok)) {
         showToast(`Catatan ${date} • ${species} terhapus dari Spreadsheet`, 'ok');
+        setTimeout(() => syncWithSheet(true), 1500);
+      } else if (res.json && res.json.status === 'error') {
+        showToast(`Spreadsheet: ${res.json.message || 'Gagal menghapus'}`, 'warn');
       } else {
         showToast(`Catatan ${date} • ${species} dihapus dari aplikasi`, 'warn');
       }
     } catch {
       showToast(`Catatan ${date} dihapus dari aplikasi`, 'warn');
     }
-
-    setTimeout(() => syncWithSheet(true), 1200);
   };
 
   // Print

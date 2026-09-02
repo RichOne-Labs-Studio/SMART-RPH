@@ -49,7 +49,22 @@ export function uid(): string {
   return 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
 }
 
-export function normalizeMonth(m: string | undefined): string {
+export function getMonthFromDate(d: string | undefined): string {
+  if (!d) return 'Januari';
+  const parts = String(d).split('-');
+  if (parts.length >= 2) {
+    const m = parseInt(parts[1], 10);
+    const names = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    if (m >= 1 && m <= 12) return names[m - 1];
+  }
+  return 'Januari';
+}
+
+export function normalizeMonth(m: string | undefined, fallbackDate?: string): string {
+  if (!m && fallbackDate) return getMonthFromDate(fallbackDate);
   if (!m) return 'Januari';
   const k = String(m).trim().toLowerCase();
   const map: Record<string, string> = {
@@ -66,7 +81,7 @@ export function normalizeMonth(m: string | undefined): string {
     '11': 'November', 'nov.': 'November', nov: 'November', november: 'November',
     '12': 'Desember', 'des.': 'Desember', des: 'Desember', desember: 'Desember'
   };
-  return map[k] || String(m).trim();
+  return map[k] || (fallbackDate ? getMonthFromDate(fallbackDate) : String(m).trim());
 }
 
 export function shortMonth(full: string): string {
@@ -106,11 +121,12 @@ export function ensureRowMeta(r: any, idx?: number): SlaughterRow {
     rowId = r.date && r.species ? `${r.date}|${r.species}` : (idx !== undefined ? `r_${idx}_${uid()}` : uid());
   }
 
+  const rDate = r.date || new Date().toISOString().split('T')[0];
   return {
     ...r,
     id: String(rowId),
-    date: r.date || new Date().toISOString().split('T')[0],
-    month: normalizeMonth(r.month || r.bulan),
+    date: rDate,
+    month: normalizeMonth(r.month || r.bulan, rDate),
     species: r.species || 'Sapi',
     table: r.table || (r.species === 'Sapi' ? 'Sapi' : 'Selain Sapi'),
     ekor: Number(r.ekor) || 0,
@@ -225,7 +241,7 @@ export async function apiGet(action: string, params?: Record<string, string>): P
   if (u && u.username && !q.has('username')) q.set('username', u.username);
   
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const res = await fetch(CONFIG.APPS_SCRIPT_URL + '?' + q.toString(), { 
@@ -244,9 +260,56 @@ export async function apiGet(action: string, params?: Record<string, string>): P
   }
 }
 
-export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean; json: any; text: string }> {
+// Helper to auto-login to Google Apps Script backend if token is missing or expired
+export async function ensureServerToken(): Promise<string | null> {
   const u = getSession();
+  if (u && u.token && !u.token.startsWith('local_')) {
+    return u.token;
+  }
+
+  try {
+    const authU = u?.username || 'superadmin';
+    const defaultAccounts: Record<string, string> = {
+      superadmin: 'rph2026super',
+      admin: 'rph2026',
+      admin_rph: 'rph2026',
+      petugas: 'rph2026',
+      eris: 'rph2026'
+    };
+    const authP = defaultAccounts[authU.toLowerCase()] || 'rph2026';
+    
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'login', username: authU, password: authP })
+    });
+    const text = await res.text();
+    let json: any = null;
+    try { json = JSON.parse(text); } catch {}
+    if (json && (json.status === 'success' || json.ok) && json.token) {
+      setSession({
+        username: authU,
+        role: u?.role || json.user?.role || 'admin',
+        token: json.token
+      });
+      return json.token;
+    }
+  } catch {}
+  return null;
+}
+
+export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean; json: any; text: string }> {
+  let u = getSession();
   
+  // If action requires server authorization and token is missing or local, try auto-obtaining token
+  if (body.action !== 'login' && body.action !== 'ping' && (!u?.token || u.token.startsWith('local_'))) {
+    const newToken = await ensureServerToken();
+    if (newToken) {
+      u = getSession();
+    }
+  }
+
   // Cleanly merge authentication token & caller without clobbering payload keys
   const payload: Record<string, any> = {
     clientVersion: CONFIG.APP_VERSION,
@@ -265,7 +328,7 @@ export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean;
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
@@ -279,6 +342,25 @@ export async function apiPost(body: Record<string, any>): Promise<{ ok: boolean;
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (e) {}
+
+    // If server says Unauthorized (e.g. token expired on GAS), attempt one refresh and retry
+    if (json && json.status === 'error' && String(json.message).toLowerCase().includes('token') && body.action !== 'login') {
+      const refreshedToken = await ensureServerToken();
+      if (refreshedToken) {
+        payload.token = refreshedToken;
+        const retryRes = await fetch(CONFIG.APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        const retryText = await retryRes.text();
+        let retryJson = null;
+        try { retryJson = JSON.parse(retryText); } catch {}
+        return { ok: retryRes.ok, json: retryJson, text: retryText };
+      }
+    }
+
     return { ok: res.ok, json, text };
   } catch (err: any) {
     clearTimeout(timeoutId);

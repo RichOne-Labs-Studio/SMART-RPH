@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SlaughterRow } from '../../types';
-import { MONTH_NAMES } from '../../services/api';
+import { MONTH_NAMES, getMonthFromDate } from '../../services/api';
 import { PlusCircle, Edit3, X, Save, AlertCircle, Sparkles, RefreshCw, Calculator } from 'lucide-react';
 
 interface InputDataModalProps {
@@ -293,7 +293,13 @@ export const InputDataModal: React.FC<InputDataModalProps> = ({
                 type="date"
                 required
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setDate(newDate);
+                  if (newDate) {
+                    setMonth(getMonthFromDate(newDate));
+                  }
+                }}
                 className="w-full bg-[#13161C] border border-[#2D333F] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#F1F5F9] focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 focus:outline-none"
               />
             </div>
