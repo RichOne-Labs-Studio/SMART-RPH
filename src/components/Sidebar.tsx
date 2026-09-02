@@ -7,7 +7,6 @@ import {
   FileSpreadsheet, 
   BarChart3, 
   Printer, 
-  RefreshCw, 
   PlusCircle, 
   Users, 
   History, 
@@ -16,7 +15,6 @@ import {
   LogIn,
   LogOut,
   ShieldCheck,
-  Radio,
   UserCheck
 } from 'lucide-react';
 
@@ -37,8 +35,8 @@ interface SidebarProps {
   onExportExcel: () => void;
   onExportBps: () => void;
   onPrint: () => void;
-  onSync: () => void;
-  syncStatus: { text: string; ok: boolean };
+  onSync?: () => void;
+  syncStatus?: { text: string; ok: boolean };
   user: UserSession | null;
   onOpenLogin: () => void;
   onLogout: () => void;
@@ -64,8 +62,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onExportExcel,
   onExportBps,
   onPrint,
-  onSync,
-  syncStatus,
   user,
   onOpenLogin,
   onLogout,
@@ -80,40 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id="sidebar-container"
       className="w-full lg:w-72 xl:w-80 flex-shrink-0 bg-[#161920] border-r border-[#2D333F] p-4 sm:p-5 space-y-5 lg:sticky lg:top-18 lg:h-[calc(100vh-4.5rem)] overflow-y-auto"
     >
-      {/* 1. Sync & Live Status Panel */}
-      <div className="p-3.5 rounded-2xl bg-[#13161C] border border-[#2D333F] space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Radio className={`w-3.5 h-3.5 ${syncStatus.ok ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#CBD5E1]">
-              Sinkronisasi Cloud
-            </span>
-          </div>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-            syncStatus.ok 
-              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60' 
-              : 'bg-amber-950/60 text-amber-300 border-amber-800/60'
-          }`}>
-            {syncStatus.ok ? 'Aktif' : 'Menghubungkan'}
-          </span>
-        </div>
-
-        <p className="text-[11px] text-[#94A3B8] leading-relaxed break-words font-medium">
-          {syncStatus.text}
-        </p>
-
-        <button
-          id="btn-sidebar-sync"
-          onClick={onSync}
-          className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-[#1A1D23] hover:bg-[#242832] text-[#CBD5E1] hover:text-[#F1F5F9] border border-[#2D333F] transition-all flex items-center justify-center gap-2 shadow-sm"
-          title="Sinkronkan data dengan Google Spreadsheet"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${syncStatus.ok ? '' : 'animate-spin'}`} />
-          <span>Sinkronkan Sekarang</span>
-        </button>
-      </div>
-
-      {/* 2. User & Admin Access Panel */}
+      {/* 1. User & Admin Access Panel */}
       {user ? (
         <div className="p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-900/40 space-y-3">
           <div className="flex items-center justify-between">

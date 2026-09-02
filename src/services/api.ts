@@ -3,7 +3,7 @@ import { AuditEntry, SlaughterRow, UserSession } from '../types';
 export const CONFIG = {
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwbUGMUkM6wphxdZKcMGoLRYirTP9_hxyR6OO7hRqviMdZGBBBl2NyPraIw-uSe8XtS/exec',
   SESSION_HOURS: 8,
-  SYNC_INTERVAL_MS: 30000,
+  SYNC_INTERVAL_MS: 15000,
   STORAGE_USER: 'SMART_RPH_CURRENT_USER',
   STORAGE_THEME: 'SMART_RPH_THEME',
   STORAGE_SIDEBAR: 'SMART_RPH_SIDEBAR_HIDDEN',

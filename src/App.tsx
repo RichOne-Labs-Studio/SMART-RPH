@@ -413,8 +413,6 @@ export default function App() {
           onExportExcel={() => setExcelModalOpen(true)}
           onExportBps={() => setBpsModalOpen(true)}
           onPrint={handlePrint}
-          onSync={() => syncWithSheet(false)}
-          syncStatus={syncStatus}
           user={user}
           onOpenLogin={() => setLoginModalOpen(true)}
           onLogout={handleLogout}
