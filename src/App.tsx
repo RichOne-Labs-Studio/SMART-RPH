@@ -389,8 +389,8 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         user={user}
-        rphTitle={INITIAL_DB.rph || 'UPT RPH Kota Cirebon'}
-        rphSub="Sistem Monitoring & Administrasi Pemotongan Ruminansia & Babi"
+        rphTitle={INITIAL_DB.rph || 'SMART-RPH'}
+        rphSub="Sistem Monitoring & Administrasi RPH"
       />
 
       {/* Main Container */}
@@ -472,10 +472,10 @@ export default function App() {
           {/* Footer */}
           <footer className="pt-6 pb-4 border-t border-[#2D333F] text-center text-xs text-[#94A3B8] space-y-1">
             <p className="font-extrabold text-[#E2E8F0]">
-              SMART-RPH Kota Cirebon • UPT Rumah Potong Hewan Dinas Ketahanan Pangan & Pertanian
+              SMART-RPH • UPT Rumah Potong Hewan Kota Cirebon
             </p>
             <p className="text-[#64748B]">
-              Jl. Kalijaga, Pegambiran, Kec. Lemahwungkuk, Kota Cirebon • Format Standar BPS & KPPT 2026
+              Jl. Kalijaga, Pegambiran, Kec. Lemahwungkuk, Kota Cirebon
             </p>
           </footer>
         </main>
